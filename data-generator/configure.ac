@@ -2,12 +2,12 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.63])
-AC_INIT([load-generator], [1.0], [exabytes18@gmail.com])
+AC_INIT([data-generator], [1.0], [exabytes18@gmail.com])
 
 # Default compiler flags
 : ${CFLAGS="--pedantic -Wall -O3 -march=native -g"}
 
-AC_CONFIG_SRCDIR([src/main.c])
+AC_CONFIG_SRCDIR([src/data-generator.c])
 AC_CONFIG_HEADERS([src/config.h])
 AC_CONFIG_MACRO_DIR([m4])
 AM_INIT_AUTOMAKE

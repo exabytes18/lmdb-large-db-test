@@ -170,9 +170,9 @@ def install_lmdb():
 
 
 @task
-def compile_load_generator():
-    put('load-generator', '.', mirror_local_mode=True)
-    with cd('load-generator'):
+def compile_data_generator():
+    put('data-generator', '.', mirror_local_mode=True)
+    with cd('data-generator'):
         run('./bootstrap')
         run('./configure LDFLAGS="-L/usr/local/lib" CPPFLAGS="-I/usr/local/include"')
         run('make clean')

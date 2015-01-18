@@ -20,4 +20,4 @@ stamp-h1
 *.o
 *.s
 
-src/load-generator
+src/data-generator

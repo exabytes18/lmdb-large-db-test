@@ -5,7 +5,7 @@ set -e -u
 DB_DIR=/mnt/data
 DB_SIZE=158G
 ROWS_PER_USER=3000
-GENERATOR=./load-generator/src/load-generator
+GENERATOR=./data-generator/src/data-generator
 export LD_LIBRARY_PATH=/usr/local/lib
 
 run_test() {

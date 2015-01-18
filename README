@@ -1,12 +1,12 @@
-Building the load generator locally:
+Building the data generator locally:
     Install LMDB:
         git clone -b mdb.master git://git.openldap.org/openldap.git
         cd openldap/libraries/liblmdb
         make clean
         make install
 
-    Compile the load generator:
-        cd load-generator
+    Compile the data generator:
+        cd data-generator
         ./bootstrap
         ./configure LDFLAGS="-L/usr/local/lib" CPPFLAGS="-I/usr/local/include"
         make clean
@@ -32,4 +32,4 @@ Running local generator in ec2:
     Create instance:
         fab launch:testbox
         fab -H TESTBOX_IP configure_instance install_lmdb
-        fab -H TESTBOX_IP compile_load_generator
+        fab -H TESTBOX_IP compile_data_generator
