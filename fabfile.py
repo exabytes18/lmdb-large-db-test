@@ -12,7 +12,7 @@ env.ec2_region = 'us-west-1'
 env.user = 'ec2-user'
 
 env.ec2_instances = {
-    'buildbox': {
+    'testbox': {
         'ami': 'ami-4b6f650e',
         'type': 'c3.2xlarge',
         'bid': 0.10,
@@ -28,9 +28,9 @@ def _launch_instance_abort_on_error(ami,
 
     bdm = boto.ec2.blockdevicemapping.BlockDeviceMapping()
     bdm['/dev/sdb'] = boto.ec2.blockdevicemapping.BlockDeviceType(
-        delete_on_termination=False,
-        size=4,
-        volume_type='gp2')
+        ephemeral_name='ephemeral0')
+    bdm['/dev/sdc'] = boto.ec2.blockdevicemapping.BlockDeviceType(
+        ephemeral_name='ephemeral1')
 
     ec2 = boto.ec2.connect_to_region(env.ec2_region)
     sirs = ec2.request_spot_instances(
@@ -139,3 +139,20 @@ def launch(name):
         bid=config['bid'],
         instance_type=config['type'],
         security_groups=config['security_groups'])
+
+
+@task
+def configure_disks():
+    #sudo('! mountpoint -q /media/ephemeral0 || umount /media/ephemeral0 && rm -rf /media/ephemeral0')
+    #sudo('dd if=/dev/zero bs=1M | tee /dev/xvdb > /dev/xvdc') # not necessary on i2, r3, or hi1 instances
+    sudo('mdadm --create /dev/md0 --level=0 -c256 --raid-devices=2 /dev/xvdb /dev/xvdc')
+    sudo('echo "DEVICE /dev/xvdb /dev/xvdc" > /etc/mdadm.conf')
+    sudo('mdadm --detail --scan >> /etc/mdadm.conf')
+
+
+@task
+def configure_instance():
+    sudo('yum update')
+    sudo('yum install sysstat xfsprogs')
+    execute(configure_disks)
+

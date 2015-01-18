@@ -28,3 +28,7 @@ Running local generator in ec2:
             env.ec2_key_pair_name
             env.ec2_vpc_id
             env.ec2_region
+
+    Create instance:
+        fab launch:testbox
+        fab -H TESTBOX_IP configure_instance
