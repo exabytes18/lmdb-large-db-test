@@ -1,0 +1,30 @@
+Building the load generator locally:
+    Install LMDB:
+        git clone -b mdb.master git://git.openldap.org/openldap.git
+        cd openldap/libraries/liblmdb
+        make clean
+        make install
+
+    Compile the load generator:
+        cd load-generator
+        ./bootstrap
+        ./configure LDFLAGS="-L/usr/local/lib" CPPFLAGS="-I/usr/local/include"
+        make clean
+        make
+
+
+Running local generator in ec2:
+    Install requirements locally
+        sudo pip install -r requirements.txt
+
+    Setup AWS credentials needed for EC2 access:
+        Create ~/.boto:
+            [Credentials]
+            aws_access_key_id = YOURACCESSKEY
+            aws_secret_access_key = YOURSECRETKEY
+
+    Edit the fabfile.py:
+        Change:
+            env.ec2_key_pair_name
+            env.ec2_vpc_id
+            env.ec2_region
