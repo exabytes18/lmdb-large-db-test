@@ -378,22 +378,30 @@ int main(int argc, char **argv) {
 	E(mdb_env_stat(env, &mst));
 
 	// print everything out
+	printf("options:\n");
+	printf("    db dir:              %s\n", db_dir);
+	printf("    db size:             %zu\n", db_size);
+	printf("    num users:           %d\n", num_users);
+	printf("    num rows per user:   %d\n", num_rows_per_user);
+	printf("    num rows per commit: %d\n", num_rows_per_commit);
+	printf("    sync interval:       %ds\n", sync_interval_in_seconds);
+	printf("\n");
 	printf("database stats:\n");
-	printf("    page size:      %d\n", mst.ms_psize);
-	printf("    tree depth:     %d\n", mst.ms_depth);
-	printf("    branch pages:   %zu\n", mst.ms_branch_pages);
-	printf("    leaf pages:     %zu\n", mst.ms_leaf_pages);
-	printf("    overflow pages: %zu\n", mst.ms_overflow_pages);
-	printf("    entries:        %zu\n", mst.ms_entries);
+	printf("    page size:           %d\n", mst.ms_psize);
+	printf("    tree depth:          %d\n", mst.ms_depth);
+	printf("    branch pages:        %zu\n", mst.ms_branch_pages);
+	printf("    leaf pages:          %zu\n", mst.ms_leaf_pages);
+	printf("    overflow pages:      %zu\n", mst.ms_overflow_pages);
+	printf("    entries:             %zu\n", mst.ms_entries);
 	printf("\n");
 	printf("file stats:\n");
-	printf("    file size:      %lld\n", st.st_size);
-	printf("    avg row size:   %lld\n", st.st_size / loaded_rows);
+	printf("    file size:           %lld\n", st.st_size);
+	printf("    avg row size:        %lld\n", st.st_size / loaded_rows);
 	printf("\n");
 	printf("insert stats:\n");
-	printf("    total time:     %.3lfs\n", load_time_seconds);
-	printf("    num rows:       %lld\n", loaded_rows);
-	printf("    rows/sec:       %.3lf\n", load_rate);
+	printf("    total time:          %.3lfs\n", load_time_seconds);
+	printf("    num rows:            %lld\n", loaded_rows);
+	printf("    rows/sec:            %.3lf\n", load_rate);
 	printf("\n");
 	
 	mdb_env_close(env);
