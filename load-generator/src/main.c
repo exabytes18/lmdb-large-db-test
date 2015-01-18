@@ -6,6 +6,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/select.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include <unistd.h>
 #include "utils.h"
 
@@ -227,19 +229,20 @@ int main(int argc, char **argv) {
 		mdb_env_flags;
 	long long int loaded_rows;
 	size_t db_size;
-	char *db, *ptr;
+	char *db_dir, *ptr, db_filename_buf[256];
 	MDB_env *env;
 	MDB_stat mst;
+	struct stat st;
 	struct timespec load_start, load_end, load_time;
 	double load_time_seconds, load_rate;
 
 	errno = 0;
 	if (argc != 7) {
-		fprintf(stderr, "usage: %s db db_size num_users num_rows_per_user num_rows_per_commit sync_interval_in_seconds\n", argv[0]);
+		fprintf(stderr, "usage: %s db_dir db_size num_users num_rows_per_user num_rows_per_commit sync_interval_in_seconds\n", argv[0]);
 		return EXIT_FAILURE;
 	}
 
-	db = argv[1];
+	db_dir = argv[1];
 	if (parse_human_readable_size(argv[2], &db_size) != 0) {
 		return EXIT_FAILURE;
 	}
@@ -275,12 +278,24 @@ int main(int argc, char **argv) {
 
 	E(mdb_env_create(&env));
 	E(mdb_env_set_mapsize(env, db_size));
-	E(mdb_env_open(env, db, mdb_env_flags, 0664));
+	E(mdb_env_open(env, db_dir, mdb_env_flags, 0664));
 
 	_insert(env, num_users, num_rows_per_user, num_rows_per_commit, sync_interval_in_seconds, &load_start, &load_end);
 
-	// print database stats
+	// Compute some stats
+	timespec_subtract(&load_time, &load_end, &load_start);
+	load_time_seconds = load_time.tv_sec + load_time.tv_nsec / 1e9;
+	loaded_rows = num_users * num_rows_per_user;
+	load_rate = loaded_rows / load_time_seconds;
+
+	// get file size
+	sprintf(db_filename_buf, "%s/data.mdb", db_dir);
+	stat(db_filename_buf, &st);
+
+	// get lmdb stats
 	E(mdb_env_stat(env, &mst));
+
+	// print everything out
 	printf("database stats:\n");
 	printf("    page size:      %d\n", mst.ms_psize);
 	printf("    tree depth:     %d\n", mst.ms_depth);
@@ -289,12 +304,10 @@ int main(int argc, char **argv) {
 	printf("    overflow pages: %zu\n", mst.ms_overflow_pages);
 	printf("    entries:        %zu\n", mst.ms_entries);
 	printf("\n");
-
-	// print insert stats
-	timespec_subtract(&load_time, &load_end, &load_start);
-	load_time_seconds = load_time.tv_sec + load_time.tv_nsec / 1e9;
-	loaded_rows = num_users * num_rows_per_user;
-	load_rate = loaded_rows / load_time_seconds;
+	printf("file stats:\n");
+	printf("    file size:      %lld\n", st.st_size);
+	printf("    avg row size:   %lld\n", st.st_size / loaded_rows);
+	printf("\n");
 	printf("insert stats:\n");
 	printf("    total time:     %.3lfs\n", load_time_seconds);
 	printf("    num rows:       %lld\n", loaded_rows);
