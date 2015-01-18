@@ -178,3 +178,10 @@ def compile_load_generator():
         run('make clean')
         run('make')
 
+
+@task
+def run_benchmarks():
+    put('benchmarks.sh', '.', mode=0755)
+    put('run.sh', '.', mode=0755)
+    sudo('./run.sh && sleep 1')
+

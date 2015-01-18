@@ -64,6 +64,7 @@ static void * _reporter_thread_main(void *ptr) {
 		rate = delta / interval_in_seconds;
 
 		printf("[%5.1lf%%]: inserted %lld rows in %.3lfs; %.3lf rows/sec\n", percent_complete, delta, interval_in_seconds, rate);
+		fflush(stdout);
 	}
 
 done:
