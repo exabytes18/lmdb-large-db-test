@@ -23,8 +23,62 @@ static const struct timespec reporter_interval = {.tv_sec = 1, .tv_nsec = 0};
 struct reporting_data {
 	volatile long long int rows_inserted;
 	volatile long long int rows_total;
-	int shutdown_pipe[2];
+	int *stopping;
+	int shutdown_fd;
 };
+
+
+struct sync_data {
+	MDB_env *env;
+	int interval_in_seconds;
+	int *stopping;
+	int shutdown_fd;
+};
+
+
+static void * _sync_thread_main(void *ptr) {
+	struct sync_data *sync_data = ptr;
+	struct timespec
+		now,
+		delay,
+		next_interval,
+		interval_in_seconds = {
+			.tv_sec = sync_data->interval_in_seconds,
+			.tv_nsec = 0
+		};
+	int rc, max_fd;
+	fd_set rfds;
+
+	get_nanotime(&next_interval);
+	while (!*sync_data->stopping) {
+		timespec_add(&next_interval, &next_interval, &interval_in_seconds);
+		mdb_env_sync(sync_data->env, 1);
+		while (!*sync_data->stopping) {
+			get_nanotime(&now);
+			timespec_subtract(&delay, &next_interval, &now);
+			if (delay.tv_sec > 0 || delay.tv_nsec > 0) {
+				max_fd = 0;
+				FD_ZERO(&rfds);
+
+				max_fd = MAX(max_fd, sync_data->shutdown_fd + 1);
+				FD_SET(sync_data->shutdown_fd, &rfds);
+
+				rc = pselect(max_fd, &rfds, NULL, NULL, &delay, NULL);
+				if (rc == 1) {
+					goto done;
+				} else if (rc == -1) {
+					fprintf(stderr, "problem waiting on pselect(): %s\n", strerror(rc));
+					abort();
+				}
+			} else {
+				break;
+			}
+		}
+	}
+
+done:
+	return NULL;
+}
 
 
 static void * _reporter_thread_main(void *ptr) {
@@ -32,10 +86,10 @@ static void * _reporter_thread_main(void *ptr) {
 	struct timespec delay, interval_start, interval_end, interval;
 	int rc, max_fd;
 	long long int interval_start_rows, interval_end_rows, delta;
-	double percent_complete, interval_in_seconds, rate;
+	double percent_complete, interval_in_seconds, rate, timestamp;
 	fd_set rfds;
 
-	for (;;) {
+	while (!*reporting_data->stopping) {
 		interval_start_rows = reporting_data->rows_inserted;
 		get_nanotime(&interval_start);
 		delay = reporter_interval;
@@ -43,8 +97,8 @@ static void * _reporter_thread_main(void *ptr) {
 			max_fd = 0;
 			FD_ZERO(&rfds);
 
-			max_fd = MAX(max_fd, reporting_data->shutdown_pipe[0] + 1);
-			FD_SET(reporting_data->shutdown_pipe[0], &rfds);
+			max_fd = MAX(max_fd, reporting_data->shutdown_fd + 1);
+			FD_SET(reporting_data->shutdown_fd, &rfds);
 
 			rc = pselect(max_fd, &rfds, NULL, NULL, &delay, NULL);
 			if (rc == 1) {
@@ -58,14 +112,15 @@ static void * _reporter_thread_main(void *ptr) {
 			get_nanotime(&interval_end);
 			timespec_subtract(&interval, &interval_end, &interval_start);
 			timespec_subtract(&delay, &reporter_interval, &interval);
-		} while(delay.tv_sec > 0 || delay.tv_nsec > 0);
+		} while (!*reporting_data->stopping && (delay.tv_sec > 0 || delay.tv_nsec > 0));
 
+		timestamp = interval_start.tv_sec + interval_start.tv_nsec / 1e9;
 		percent_complete = ((double) reporting_data->rows_inserted / reporting_data->rows_total) * 100.;
 		delta = interval_end_rows - interval_start_rows;
 		interval_in_seconds = interval.tv_sec + interval.tv_nsec / 1e9;
 		rate = delta / interval_in_seconds;
 
-		printf("[%5.1lf%%]: inserted %lld rows in %.3lfs; %.3lf rows/sec\n", percent_complete, delta, interval_in_seconds, rate);
+		printf("[%5.1lf%%, %.3lf]: inserted %lld rows in %.3lfs; %.3lf rows/sec\n", percent_complete, timestamp, delta, interval_in_seconds, rate);
 		fflush(stdout);
 	}
 
@@ -86,16 +141,24 @@ static void _insert(MDB_env *env, int num_users, int num_txns_per_user, int num_
 		txn_id_network_order,
 		timestamp_network_order,
 		amount_network_order,
-		txn_row_count;
+		txn_row_count,
+		shutdown_pipe[2],
+		stopping = 0;
 	float amount;
 	char completed, primary_key[8], value[9];
 	MDB_dbi dbi;
 	MDB_txn *txn;
 	MDB_val key, data;
-	pthread_t thread;
+	pthread_t reporter_thread, sync_thread;
 	struct reporting_data reporting_data = {
 		.rows_inserted = 0,
-		.rows_total = num_users * num_txns_per_user
+		.rows_total = num_users * num_txns_per_user,
+		.stopping = &stopping
+	};
+	struct sync_data sync_data = {
+		.env = env,
+		.interval_in_seconds = sync_interval_in_seconds,
+		.stopping = &stopping
 	};
 
 	user_iteration_patterns = malloc(sizeof(*user_iteration_patterns) * num_user_iteration_patterns);
@@ -126,23 +189,33 @@ static void _insert(MDB_env *env, int num_users, int num_txns_per_user, int num_
 		}
 	}
 
-	if (pipe(reporting_data.shutdown_pipe) != 0) {
+	if (pipe(shutdown_pipe) != 0) {
 		fprintf(stderr, "Unable to create shutdown pipe: %s\n", strerror(errno));
 		abort();
 	}
-	if (set_nonblocking(reporting_data.shutdown_pipe[0]) != 0) {
+	if (set_nonblocking(shutdown_pipe[0]) != 0) {
 		fprintf(stderr, "problem setting shutdown pipe (read side) to be nonblocking: %s\n", strerror(errno));
 		abort();
 	}
-	if (set_nonblocking(reporting_data.shutdown_pipe[1]) != 0) {
+	if (set_nonblocking(shutdown_pipe[1]) != 0) {
 		fprintf(stderr, "problem setting shutdown pipe (write side) to be nonblocking: %s\n", strerror(errno));
 		abort();
 	}
 
-	rc = pthread_create(&thread, NULL, _reporter_thread_main, &reporting_data);
+	reporting_data.shutdown_fd = shutdown_pipe[0];
+	rc = pthread_create(&reporter_thread, NULL, _reporter_thread_main, &reporting_data);
 	if (rc != 0) {
-		fprintf(stderr, "Problem creating thread: %s\n", strerror(rc));
+		fprintf(stderr, "Problem creating reporter_thread: %s\n", strerror(rc));
 		abort();
+	}
+
+	if (sync_interval_in_seconds > 0) {
+		sync_data.shutdown_fd = shutdown_pipe[0];
+		rc = pthread_create(&sync_thread, NULL, _sync_thread_main, &sync_data);
+		if (rc != 0) {
+			fprintf(stderr, "Problem creating sync_thread: %s\n", strerror(rc));
+			abort();
+		}
 	}
 
 	// timer start
@@ -191,21 +264,30 @@ static void _insert(MDB_env *env, int num_users, int num_txns_per_user, int num_
 	// timer end
 	get_nanotime(end);
 
-	if (force_write(reporting_data.shutdown_pipe[1], 0) != 1) {
+	stopping = 1;
+	if (force_write(shutdown_pipe[1], 0) != 1) {
 		fprintf(stderr, "cannot write to shutdown pipe: %s\n", strerror(errno));
 		abort();
 	}
 
-	rc = pthread_join(thread, NULL);
+	rc = pthread_join(reporter_thread, NULL);
 	if (rc != 0) {
-		fprintf(stderr, "Problem joining thread: %s\n", strerror(rc));
+		fprintf(stderr, "Problem joining reporter thread: %s\n", strerror(rc));
 		abort();
 	}
 
-	if (uninterruptable_close(reporting_data.shutdown_pipe[0]) != 0) {
+	if (sync_interval_in_seconds > 0) {
+		rc = pthread_join(sync_thread, NULL);
+		if (rc != 0) {
+			fprintf(stderr, "Problem joining sync thread: %s\n", strerror(rc));
+			abort();
+		}
+	}
+
+	if (uninterruptable_close(shutdown_pipe[0]) != 0) {
 		fprintf(stderr, "problem closing shutdown pipe (read side): %s\n", strerror(errno));
 	}
-	if (uninterruptable_close(reporting_data.shutdown_pipe[1]) != 0) {
+	if (uninterruptable_close(shutdown_pipe[1]) != 0) {
 		fprintf(stderr, "problem closing shutdown pipe (read side): %s\n", strerror(errno));
 	}
 
