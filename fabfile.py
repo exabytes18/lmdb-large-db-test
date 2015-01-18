@@ -4,7 +4,8 @@ import re
 import time
 
 # http://docs.fabfile.org/en/latest/api/core/operations.html
-from fabric.api import abort, env, put, sudo
+from fabric.api import abort, env, put, run, sudo
+from fabric.context_managers import cd
 from fabric.decorators import runs_once, task
 
 env.ec2_key_pair_name = 'exabytes18@geneva'
@@ -148,11 +149,32 @@ def configure_disks():
     sudo('mdadm --create /dev/md0 --level=0 -c256 --raid-devices=2 /dev/xvdb /dev/xvdc')
     sudo('echo "DEVICE /dev/xvdb /dev/xvdc" > /etc/mdadm.conf')
     sudo('mdadm --detail --scan >> /etc/mdadm.conf')
+    sudo('mkfs.xfs -f /dev/md0')
+    sudo('mkdir -p /mnt/data')
+    sudo('mount -t xfs -o noatime,nodiratime /dev/md0 /mnt/data')
 
 
 @task
 def configure_instance():
     sudo('yum update')
-    sudo('yum install sysstat xfsprogs')
+    sudo('yum install autoconf automake gcc git sysstat xfsprogs')
     execute(configure_disks)
+
+
+@task
+def install_lmdb():
+    run('git clone -b mdb.master git://git.openldap.org/openldap.git')
+    with cd('openldap/libraries/liblmdb'):
+        run('make clean')
+        run('make install')
+
+
+@task
+def compile_load_generator():
+    put('load-generator', '.', mirror_local_mode=True)
+    with cd('load-generator'):
+        run('./bootstrap')
+        run('./configure LDFLAGS="-L/usr/local/lib" CPPFLAGS="-I/usr/local/include"')
+        run('make clean')
+        run('make')
 

@@ -31,4 +31,5 @@ Running local generator in ec2:
 
     Create instance:
         fab launch:testbox
-        fab -H TESTBOX_IP configure_instance
+        fab -H TESTBOX_IP configure_instance install_lmdb
+        fab -H TESTBOX_IP compile_load_generator
