@@ -4,7 +4,7 @@ import re
 import time
 
 # http://docs.fabfile.org/en/latest/api/core/operations.html
-from fabric.api import abort, env, put, run, sudo
+from fabric.api import abort, execute, env, put, run, sudo
 from fabric.context_managers import cd
 from fabric.decorators import runs_once, task
 
@@ -13,12 +13,18 @@ env.ec2_region = 'us-west-1'
 env.user = 'ec2-user'
 
 env.ec2_instances = {
-    'testbox': {
+    'smallbox': {
         'ami': 'ami-4b6f650e',
         'type': 'c3.2xlarge',
         'bid': 0.10,
         'security_groups': ['SSH Only'],
-    }
+    },
+    'largebox': {
+        'ami': 'ami-4b6f650e',
+        'type': 'r3.8xlarge',
+        'bid': 0.50,
+        'security_groups': ['SSH Only'],
+    },
 }
 
 
@@ -156,8 +162,8 @@ def configure_disks():
 
 @task
 def configure_instance():
-    sudo('yum update')
-    sudo('yum install autoconf automake gcc git sysstat xfsprogs')
+    sudo('yum -y update')
+    sudo('yum -y install autoconf automake gcc git sysstat xfsprogs')
     execute(configure_disks)
 
 
@@ -166,7 +172,7 @@ def install_lmdb():
     run('git clone -b mdb.master git://git.openldap.org/openldap.git')
     with cd('openldap/libraries/liblmdb'):
         run('make clean')
-        run('make install')
+        sudo('make install')
 
 
 @task

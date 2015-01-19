@@ -30,6 +30,6 @@ Running local generator in ec2:
             env.ec2_region
 
     Create instance:
-        fab launch:testbox
+        fab launch:smallbox
         fab -H TESTBOX_IP configure_instance install_lmdb
         fab -H TESTBOX_IP compile_data_generator

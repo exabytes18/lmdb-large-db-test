@@ -17,10 +17,9 @@ run_test() {
 }
 
 mkdir -p results
-for users in 125000 1000000 2000000 ; do
-	for commit_size in 1 32 1024 ; do
-		run_test "$users" "$commit_size" -1 > results/"u$users-b$commit_size-nosync.txt"
-		run_test "$users" "$commit_size" 0 > results/"u$users-b$commit_size-fullsync.txt"
-		run_test "$users" "$commit_size" 1 > results/"u$users-b$commit_size-periodicsync.txt"
-	done
+
+users=125000
+for commit_size in 1 32 1024 ; do
+	run_test "$users" "$commit_size" -1 > results/"u$users-b$commit_size-nosync.txt"
+	run_test "$users" "$commit_size" 1 > results/"u$users-b$commit_size-periodicsync.txt"
 done
