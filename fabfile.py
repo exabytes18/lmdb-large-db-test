@@ -150,9 +150,9 @@ def launch(name):
 
 @task
 def configure_disks():
-    #sudo('! mountpoint -q /media/ephemeral0 || umount /media/ephemeral0 && rm -rf /media/ephemeral0')
+    sudo('! mountpoint -q /media/ephemeral0 || umount /media/ephemeral0 && rm -rf /media/ephemeral0')
     #sudo('dd if=/dev/zero bs=1M | tee /dev/xvdb > /dev/xvdc') # not necessary on i2, r3, or hi1 instances
-    sudo('mdadm --create /dev/md0 --level=0 -c256 --raid-devices=2 /dev/xvdb /dev/xvdc')
+    sudo('mdadm --create /dev/md0 --level=0 -c32 --raid-devices=2 /dev/xvdb /dev/xvdc')
     sudo('echo "DEVICE /dev/xvdb /dev/xvdc" > /etc/mdadm.conf')
     sudo('mdadm --detail --scan >> /etc/mdadm.conf')
     sudo('mkfs.xfs -f /dev/md0')

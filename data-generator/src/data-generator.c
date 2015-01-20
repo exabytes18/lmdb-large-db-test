@@ -353,7 +353,7 @@ int main(int argc, char **argv) {
 		return EXIT_FAILURE;
 	}
 
-	mdb_env_flags = MDB_NORDAHEAD;
+	mdb_env_flags = 0;
 	if (sync_interval_in_seconds != 0) {
 		mdb_env_flags |= MDB_NOSYNC;
 	}
